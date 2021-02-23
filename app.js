@@ -1,7 +1,17 @@
+if (process.env.NODE_ENV !== "production") {
+    require('dotenv').config();
+}
+
+// const dbUrl =  "mongodb+srv://Suya:QW1iR4HXYslRsrfM@yelpcamp.egkqw.mongodb.net/test?retryWrites=true&w=majority"
+console.log(process.env.DB_URL);
+const dbUrl = process.env.DB_URL || 'mongodb://localhost:27017/yelp_camp';
+
+
 const express       = require("express"),
 	  app           = express(),
 	  bodyParser    = require("body-parser"),
 	  mongoose      = require("mongoose"),
+	  session 		= require('express-session'),
 	  flash 		= require("connect-flash"),
 	  passport      = require("passport"),
 	  LocalStrategy = require("passport-local"), 
@@ -15,9 +25,37 @@ let   commentRoutes    = require("./routes/comments"),
       campgroundRoutes = require("./routes/campgrounds"),
 	  indexRoutes       = require("./routes/index");
 
+
+const MongoDBStore = require('connect-mongo')(session);
+ 
+
 app.use(bodyParser.urlencoded({extended:true}));
 mongoose.set('useUnifiedTopology', true);
-mongoose.connect("mongodb://localhost:27017/yelp_camp", { useNewUrlParser: true });
+
+
+
+// const dbUrl = process.env.DB_URL;
+// console.log(dbUrl)
+
+mongoose.connect(dbUrl, { 
+	useNewUrlParser: true,
+	useCreateIndex: true,
+    useUnifiedTopology: true,
+    useFindAndModify: false
+});
+
+const db = mongoose.connection;
+db.on("error", console.error.bind(console, "connection error:"));
+db.once("open", () => {
+    console.log("Database connected");
+});
+const secret = process.env.SECRET || 'this should be a better secret!';
+
+const store = new MongoDBStore({
+	url: dbUrl,
+    secret,
+    touchAfter: 24 * 60 * 60
+});
 app.set("view engine", "ejs");
 app.use(express.static(__dirname + "/public")); 
 app.use(methodOverride("_method")); 
@@ -25,9 +63,11 @@ app.use(flash());
 // seedDB();
 
 app.use(require("express-session")({
-	secret: "Woohoo you are being tricked!!",
+	store,
+	name: 'session',
+	secret,
 	resave: false,
-	saveUninitialized: false
+	saveUninitialized: true
 }));
 app.use(passport.initialize());
 app.use(passport.session());
@@ -46,6 +86,7 @@ app.use("/", indexRoutes);
 app.use("/campgrounds", campgroundRoutes);
 app.use("/campgrounds/:id/comments", commentRoutes);
 
-app.listen(3000, () => {
-	console.log("YelpCamp Server Has Started!");
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+	console.log(`Serving on port ${port}`);
 });
